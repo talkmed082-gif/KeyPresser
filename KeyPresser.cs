@@ -1,5 +1,5 @@
 // KeyPresser: 지정한 키를 일정 주기마다 현재 활성 창 또는 고른 프로그램 창에 보냄
-// 빌드: C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:KeyPresser.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll KeyPresser.cs
+// 빌드: C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:KeyPresser.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /win32icon:KeyPresser.ico KeyPresser.cs
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -46,6 +46,7 @@ class KeyPresser : Form
     [DllImport("user32.dll", SetLastError = true)] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] static extern uint MapVirtualKey(uint code, uint mapType);
     [DllImport("user32.dll")] static extern bool IsChild(IntPtr parent, IntPtr child);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
 
     const uint KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2;
     const uint WM_KEYDOWN = 0x100, WM_KEYUP = 0x101;
@@ -70,6 +71,8 @@ class KeyPresser : Form
     DateTimePicker untilPicker = new DateTimePicker();
     CheckBox repeatChk = new CheckBox();
     NumericUpDown repeatBox = new NumericUpDown();
+    CheckBox rdpChk = new CheckBox();
+    bool settingsLoaded;
     Button toggleBtn = new Button();
     Label statusLbl = new Label();
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
@@ -98,8 +101,9 @@ class KeyPresser : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         TopMost = true;
-        ClientSize = new Size(320, 288);
+        ClientSize = new Size(320, 318);
         Font = new Font("Malgun Gothic", 9f);
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
         Controls.Add(new Label { Text = "키", Location = new Point(12, 15), AutoSize = true });
         keyBox.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -171,19 +175,27 @@ class KeyPresser : Form
         repeatBox.Enabled = false;
         Controls.Add(repeatBox);
 
+        // rdp_to_console.ps1이 ini의 이 값을 읽으므로 바꾸는 즉시 저장
+        rdpChk.Text = "원격 연결이 끊겨도 계속 (PC 화면이 안 잠김)";
+        rdpChk.Location = new Point(12, 216);
+        rdpChk.AutoSize = true;
+        rdpChk.CheckedChanged += (s, e) => { if (settingsLoaded) SaveSettings(); };
+        Controls.Add(rdpChk);
+
         toggleBtn.Text = "시작 (Ctrl+Alt+P)";
-        toggleBtn.Location = new Point(12, 216);
+        toggleBtn.Location = new Point(12, 246);
         toggleBtn.Size = new Size(296, 30);
         toggleBtn.Click += (s, e) => Toggle();
         Controls.Add(toggleBtn);
 
-        statusLbl.Location = new Point(12, 256);
+        statusLbl.Location = new Point(12, 286);
         statusLbl.Size = new Size(296, 30);
         statusLbl.Text = "정지됨";
         Controls.Add(statusLbl);
 
         LoadTargets();
         LoadSettings();
+        settingsLoaded = true;
         timer.Tick += (s, e) => Tick();
         focusWatch.Tick += (s, e) => WatchFocus();
         focusWatch.Start();
@@ -246,6 +258,7 @@ class KeyPresser : Form
             "untilTime=" + untilPicker.Value.ToString("HH:mm"),
             "repeat=" + repeatChk.Checked,
             "repeatCount=" + repeatBox.Value,
+            "rdpKeep=" + rdpChk.Checked,
         };
         try { System.IO.File.WriteAllLines(SettingsPath, lines); } catch { }
     }
@@ -282,6 +295,7 @@ class KeyPresser : Form
         if (d.TryGetValue("repeat", out v) && bool.TryParse(v, out b)) repeatChk.Checked = b;
         if (d.TryGetValue("repeatCount", out v) && decimal.TryParse(v, out n))
             repeatBox.Value = Math.Max(repeatBox.Minimum, Math.Min(repeatBox.Maximum, n));
+        if (d.TryGetValue("rdpKeep", out v) && bool.TryParse(v, out b)) rdpChk.Checked = b;
     }
 
     void LoadTargets()
@@ -378,8 +392,19 @@ class KeyPresser : Form
     void UpdateTargetOptions()
     {
         bool idle = !timer.Enabled, hasTarget = targetBox.SelectedIndex > 0;
-        backgroundChk.Enabled = idle && hasTarget;
+        bool unsupported = hasTarget && IgnoresBackgroundKeys(((Target)targetBox.SelectedItem).Hwnd);
+        if (unsupported) backgroundChk.Checked = false;
+        backgroundChk.Text = unsupported ? "백그라운드 미지원 프로그램" : "백그라운드로 보내기 (창을 앞으로 안 불러옴)";
+        backgroundChk.Enabled = idle && hasTarget && !unsupported;
         returnChk.Enabled = idle && hasTarget && !backgroundChk.Checked;
+    }
+
+    // Chromium 계열(VS Code, Chrome 등)은 뒤에 있을 때 보낸 키 메시지를 무시함
+    static bool IgnoresBackgroundKeys(IntPtr h)
+    {
+        var sb = new StringBuilder(64);
+        GetClassName(h, sb, 64);
+        return sb.ToString().StartsWith("Chrome_WidgetWin");
     }
 
     string StopAtText()

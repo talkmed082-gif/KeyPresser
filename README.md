@@ -22,7 +22,7 @@
 
 ## 제한 사항
 
-- **백그라운드 모드는 프로그램에 따라 동작하지 않습니다.** VS Code 같은 Chromium 기반 프로그램은 뒤에 있을 때 이 방식의 키를 무시합니다. 이런 프로그램에는 앞으로 불러오는 모드를 쓰세요.
+- **백그라운드 모드는 프로그램에 따라 동작하지 않습니다.** VS Code, Chrome 같은 Chromium 기반 프로그램은 뒤에 있을 때 이 방식의 키를 무시하므로, 이런 창을 고르면 체크박스가 비활성화됩니다. 그 밖의 프로그램도 키를 무시할 수 있으니, 들어가지 않으면 앞으로 불러오는 모드를 쓰세요.
 - 백그라운드 모드는 시작 전에 대상 창의 입력칸을 한 번 클릭해 두어야 합니다. 뒤에 있는 창은 Windows가 입력칸을 알려주지 않아서, 앞에 있을 때 기억해 둡니다.
 - 관리자 권한으로 실행 중인 창에 보내려면 KeyPresser도 관리자 권한으로 실행해야 합니다.
 - 화면이 잠겨 있거나 원격 데스크톱 연결이 끊긴 상태에서는 키가 전달되지 않습니다.
@@ -46,7 +46,9 @@
 schtasks /create /tn "KeyPresser RDP to console" /xml rdp_to_console_task.xml
 ```
 
-연결이 끊긴 뒤 5초를 기다려 여전히 끊긴 상태일 때만 세션을 옮깁니다. 기록은 같은 폴더의 `rdp_to_console.log`에 남습니다. 지우려면 `schtasks /delete /tn "KeyPresser RDP to console"`을 실행합니다.
+4. KeyPresser에서 **원격 연결이 끊겨도 계속**을 체크합니다. 기본값은 꺼짐이며, 위 예약 작업을 등록하지 않으면 이 체크박스는 아무 일도 하지 않습니다.
+
+연결이 끊긴 뒤 5초를 기다려, 여전히 끊겨 있고 체크가 켜져 있으며 KeyPresser가 실행 중일 때만 세션을 옮깁니다. 기록은 같은 폴더의 `rdp_to_console.log`에 남습니다. 지우려면 `schtasks /delete /tn "KeyPresser RDP to console"`을 실행합니다.
 
 ## 빌드
 
@@ -54,5 +56,5 @@ schtasks /create /tn "KeyPresser RDP to console" /xml rdp_to_console_task.xml
 
 ```powershell
 $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-& $csc /target:winexe /out:KeyPresser.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll KeyPresser.cs
+& $csc /target:winexe /out:KeyPresser.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /win32icon:KeyPresser.ico KeyPresser.cs
 ```

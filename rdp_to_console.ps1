@@ -29,5 +29,11 @@ public static class Wts {
 $state = [Wts]::State($id)
 if ($state -ne 4) { Log "세션 $id 상태 $state(0=활성, 4=끊김) → 그대로 둠"; exit }
 
+# 화면이 잠기지 않은 채로 남으므로, 앱에서 체크했고 KeyPresser가 실행 중일 때만 옮김
+$ini = Join-Path $PSScriptRoot 'KeyPresser.ini'
+$keep = (Test-Path $ini) -and (Select-String -Path $ini -Pattern '^rdpKeep=True$' -Quiet)
+if (-not $keep) { Log "세션 $id 끊김 → 체크 꺼짐, 그대로 둠"; exit }
+if (-not (Get-Process KeyPresser -ErrorAction SilentlyContinue)) { Log "세션 $id 끊김 → KeyPresser 꺼짐, 그대로 둠"; exit }
+
 tscon $id /dest:console
 Log "세션 $id 끊김 → console로 이동 (tscon 종료코드 $LASTEXITCODE)"
